@@ -18,6 +18,8 @@ const appointmentSchema = new mongoose.Schema(
       default: null,
     },
 
+    fillCaseForm: { type: Boolean, default: false },
+
     status: {
       type: String,
       enum: ["pending", "confirmed", "cancelled"],
