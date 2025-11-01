@@ -1,5 +1,4 @@
 import React from "react";
-import CaseForm from "./CaseForm";
 
 const OPDSelectionStep = ({
   formData,
@@ -9,6 +8,17 @@ const OPDSelectionStep = ({
   onNext,
   onInputChange,
 }) => {
+  // ✅ Toggle OPD selection logic
+  const handleOPDClick = (opd) => {
+    if (formData.selectedOPD === opd) {
+      // Deselect if same OPD is clicked again
+      onOPDSelect(null);
+    } else {
+      // Select new OPD
+      onOPDSelect(opd);
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="text-center">
@@ -17,13 +27,9 @@ const OPDSelectionStep = ({
         </h3>
         <p className="text-gray-600 text-sm sm:text-base">
           Available for{" "}
-          <span className="font-semibold text-[#222]">
-            {formData.selectedDate}
-          </span>{" "}
+          <span className="font-semibold text-[#222]">{formData.selectedDate}</span>{" "}
           at{" "}
-          <span className="font-semibold text-[#222]">
-            {formData.selectedTime}
-          </span>
+          <span className="font-semibold text-[#222]">{formData.selectedTime}</span>
         </p>
       </div>
 
@@ -31,7 +37,7 @@ const OPDSelectionStep = ({
         {availableOPDs.map((opd) => (
           <button
             key={opd}
-            onClick={() => onOPDSelect(opd)}
+            onClick={() => handleOPDClick(opd)}
             className={`p-4 sm:p-6 rounded-xl border-2 transition-all text-center ${
               formData.selectedOPD === opd
                 ? "border-[#f8d816] bg-yellow-50 shadow-lg scale-105"
@@ -61,7 +67,7 @@ const OPDSelectionStep = ({
         ))}
       </div>
 
-      {/* Case Description Textarea */}
+      {/* Case Description */}
       <div>
         <label className="block text-sm font-medium text-[#222] mb-1">
           Describe why you need treatment
@@ -76,9 +82,25 @@ const OPDSelectionStep = ({
         />
       </div>
 
-      {/* Optional Case Form Component */}
-      <CaseForm formData={formData} onInputChange={onInputChange} />
+      {/* Checkbox */}
+      <div className="flex items-start sm:items-center space-x-2">
+        <input
+          type="checkbox"
+          id="fillCaseForm"
+          name="fillCaseForm"
+          checked={formData.fillCaseForm || false}
+          onChange={onInputChange}
+          className="mt-1 sm:mt-0 w-4 h-4 border-gray-300 text-[#f8d816] focus:ring-[#f8d816] rounded"
+        />
+        <label
+          htmlFor="fillCaseForm"
+          className="text-sm sm:text-base text-[#222] select-none"
+        >
+          I want to fill the detailed case form
+        </label>
+      </div>
 
+      {/* Buttons */}
       <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
         <button
           onClick={onBack}
@@ -86,12 +108,13 @@ const OPDSelectionStep = ({
         >
           Back
         </button>
+
         <button
-          onClick={onNext}
+          onClick={() => onNext(4)}
           disabled={!formData.selectedOPD}
           className="w-full sm:w-1/2 bg-[#f8d816] text-[#222] py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#e6c714] transition-colors text-sm sm:text-base"
         >
-          Continue to Payment
+          Next
         </button>
       </div>
     </div>
