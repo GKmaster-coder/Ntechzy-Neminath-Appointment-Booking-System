@@ -11,15 +11,21 @@ import { useTimeSlots } from './hooks/useTimeSlots';
 
 const UserBooking = () => {
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    name: '',
-    phoneNo: '',
-    email: '',
-    selectedDate: '',
-    selectedTime: '',
-    selectedOPD: null,
-    paymentMethod: null
-  });
+const [formData, setFormData] = useState({
+  name: "",
+  phoneNo: "",
+  email: "",
+  selectedDate: "",
+  selectedTime: "",
+  selectedOPD: null,
+  paymentMethod: null,
+  caseDescription: "",
+  previousHistory: "",
+  currentMeds: "",
+  allergies: "",
+});
+
+
   
   const [availableOPDs, setAvailableOPDs] = useState([]);
   const [suggestedSlots, setSuggestedSlots] = useState([]);
@@ -165,13 +171,15 @@ const UserBooking = () => {
         );
       case 3:
         return (
-          <OPDSelectionStep
-            formData={formData}
-            availableOPDs={availableOPDs}
-            onOPDSelect={handleOPDSelect}
-            onBack={() => setStep(2)}
-            onNext={() => setStep(4)}
-          />
+   <OPDSelectionStep
+  formData={formData}
+  availableOPDs={availableOPDs}
+  onOPDSelect={handleOPDSelect}
+  onBack={() => setStep(2)}
+  onNext={() => setStep(4)}
+  onInputChange={handleInputChange}
+/>
+
         );
       case 4:
         return (
