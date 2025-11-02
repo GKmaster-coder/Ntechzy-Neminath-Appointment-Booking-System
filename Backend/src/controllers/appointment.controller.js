@@ -18,12 +18,15 @@ export const createAppointment = asyncHandler(async (req, res) => {
     caseForm
   } = req.body;
 
-  // Validation
+  // ✅ Validation
   if (!name || !phoneNo || !selectedDate || !selectedTime || !selectedOPD) {
-    throw new ApiError(400, "Required fields missing: name, phoneNo, selectedDate, selectedTime, selectedOPD");
+    throw new ApiError(
+      400,
+      "Required fields missing: name, phoneNo, selectedDate, selectedTime, selectedOPD"
+    );
   }
 
-  // Slot validation: max 5 bookings per time slot
+  // ✅ Slot validation: max 5 bookings per time slot
   const existingCount = await Appointment.countDocuments({
     selectedDate,
     selectedTime,
@@ -34,18 +37,7 @@ export const createAppointment = asyncHandler(async (req, res) => {
     throw new ApiError(400, "This slot is full. Please select another time.");
   }
 
-  let savedCaseForm = null;
-
-  // Create CaseForm only if fillCaseForm is true and caseForm data is provided
-  if (fillCaseForm && caseForm && Object.keys(caseForm).length > 0) {
-    try {
-      savedCaseForm = await CaseForm.create(caseForm);
-    } catch (error) {
-      throw new ApiError(400, `Error creating case form: ${error.message}`);
-    }
-  }
-
-  // Create Appointment
+  // ✅ 1️⃣ Create appointment first
   const appointment = await Appointment.create({
     name,
     phoneNo,
@@ -55,11 +47,44 @@ export const createAppointment = asyncHandler(async (req, res) => {
     selectedOPD,
     caseDescription,
     fillCaseForm: fillCaseForm || false,
-    caseFormId: savedCaseForm?._id || null,
+    caseFormId: null, // will be updated later
   });
 
-  // Populate the case form data in response
-  const populatedAppointment = await Appointment.findById(appointment._id).populate("caseFormId");
+  let savedCaseForm = null;
+
+  // ✅ 2️⃣ If case form is selected, verify and save it
+  if (fillCaseForm) {
+    if (!caseForm || typeof caseForm !== "object") {
+      throw new ApiError(400, "Case form data is missing even though fillCaseForm is true");
+    }
+
+    // Check if every field is empty (prevents null case form)
+    const isCaseFormEmpty = Object.values(caseForm).every(
+      (value) => value === "" || value === null || value === undefined
+    );
+
+    if (isCaseFormEmpty) {
+      throw new ApiError(400, "Case form cannot be empty when selected");
+    }
+
+    try {
+      savedCaseForm = await CaseForm.create({
+        ...caseForm,
+        appointmentId: appointment._id, // ✅ always valid ObjectId
+      });
+
+      // ✅ Update appointment with caseFormId
+      appointment.caseFormId = savedCaseForm._id;
+      await appointment.save();
+    } catch (error) {
+      throw new ApiError(400, `Error creating case form: ${error.message}`);
+    }
+  }
+
+  // ✅ Populate caseForm in response
+  const populatedAppointment = await Appointment.findById(appointment._id).populate(
+    "caseFormId"
+  );
 
   return res
     .status(201)

@@ -1,24 +1,59 @@
 import React, { useState, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  getAllAppointments,
+  updateAppointmentStatus,
+  selectAllAppointments,
+  selectAdminLoading,
+  selectAdminError,
+} from "../../store/slices/appointmentSlice"; // Adjust path as needed
 
 const AdminDashboard = () => {
-  const [bookings, setBookings] = useState([]);
+  const dispatch = useDispatch();
+  
+  // Redux state
+  const appointments = useSelector(selectAllAppointments);
+  const loading = useSelector(selectAdminLoading);
+  const error = useSelector(selectAdminError);
+  
+  // Local state for filters
   const [filterDate, setFilterDate] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterOPD, setFilterOPD] = useState("all");
 
+  // Fetch appointments on component mount
   useEffect(() => {
-    const savedBookings = localStorage.getItem("opdBookings");
-    if (savedBookings) setBookings(JSON.parse(savedBookings));
-  }, []);
+    dispatch(getAllAppointments());
+  }, [dispatch]);
 
-  const handleStatusChange = (id, status) => {
-    const updated = bookings.map((b) =>
-      b.id === id ? { ...b, status } : b
-    );
-    setBookings(updated);
-    localStorage.setItem("opdBookings", JSON.stringify(updated));
+  // Handle status change with API call
+  const handleStatusChange = async (id, status) => {
+    try {
+      await dispatch(updateAppointmentStatus({ id, status })).unwrap();
+      // Optionally refresh the list
+      dispatch(getAllAppointments());
+    } catch (err) {
+      console.error("Failed to update status:", err);
+      alert("Failed to update appointment status. Please try again.");
+    }
   };
 
+  // Map API data to component format
+  const bookings = appointments.map((apt) => ({
+    id: apt._id,
+    name: apt.name,
+    phoneNo: apt.phoneNo,
+    email: apt.email,
+    date: apt.selectedDate,
+    time: apt.selectedTime,
+    opd: apt.selectedOPD,
+    status: apt.status,
+    caseDescription: apt.caseDescription,
+    fillCaseForm: apt.fillCaseForm,
+    caseFormId: apt.caseFormId,
+  }));
+
+  // Filter logic
   const filtered = bookings.filter(
     (b) =>
       (filterDate ? b.date === filterDate : true) &&
@@ -26,26 +61,28 @@ const AdminDashboard = () => {
       (filterOPD === "all" || b.opd.toString() === filterOPD)
   );
 
+  // Statistics
   const total = bookings.length;
   const confirmed = bookings.filter((b) => b.status === "confirmed").length;
   const cancelled = bookings.filter((b) => b.status === "cancelled").length;
+  const pending = bookings.filter((b) => b.status === "pending").length;
   const todayBookings = bookings.filter(
     (b) => b.date === new Date().toISOString().split("T")[0]
   ).length;
 
   const uniqueDates = [...new Set(bookings.map((b) => b.date))].sort();
 
-  // Generate time slots for reference (same as UserBooking component)
-  const generateTimeSlots = () => {
-    const slots = [];
-    for (let hour = 9; hour < 16; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        slots.push(timeString);
-      }
-    }
-    return slots;
-  };
+  // Loading state
+  if (loading && bookings.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-[#f8d816] mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading appointments...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 poppins">
@@ -55,6 +92,24 @@ const AdminDashboard = () => {
           <h1 className="text-3xl font-bold text-[#222] mb-2">OPD Booking Dashboard</h1>
           <p className="text-gray-600">Manage and monitor all OPD appointments efficiently</p>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg flex items-center justify-between">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <span className="font-medium">{error}</span>
+            </div>
+            <button 
+              onClick={() => dispatch(getAllAppointments())}
+              className="text-red-700 hover:text-red-900 font-semibold underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -86,6 +141,19 @@ const AdminDashboard = () => {
               ),
             },
             {
+              title: "Pending",
+              count: pending,
+              color: "#f59e0b",
+              icon: (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              ),
+            },
+            {
               title: "Cancelled",
               count: cancelled,
               color: "#ef4444",
@@ -95,19 +163,6 @@ const AdminDashboard = () => {
                   strokeLinejoin="round"
                   strokeWidth={2}
                   d="M6 18L18 6M6 6l12 12"
-                />
-              ),
-            },
-            {
-              title: "Today's Bookings",
-              count: todayBookings,
-              color: "#3b82f6",
-              icon: (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               ),
             },
@@ -150,9 +205,21 @@ const AdminDashboard = () => {
 
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <h3 className="text-xl font-semibold text-[#222] mb-4">
-            Filter Appointments
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold text-[#222]">
+              Filter Appointments
+            </h3>
+            <button
+              onClick={() => dispatch(getAllAppointments())}
+              className="px-4 py-2 bg-[#f8d816] text-[#222] rounded-lg font-semibold hover:bg-[#e0c614] transition-colors flex items-center gap-2"
+              disabled={loading}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Date Filter */}
             <div>
@@ -167,7 +234,11 @@ const AdminDashboard = () => {
                 <option value="">All Dates</option>
                 {uniqueDates.map((d) => (
                   <option key={d} value={d}>
-                    {d}
+                    {new Date(d).toLocaleDateString('en-IN', { 
+                      year: 'numeric', 
+                      month: 'short', 
+                      day: 'numeric' 
+                    })}
                   </option>
                 ))}
               </select>
@@ -184,6 +255,7 @@ const AdminDashboard = () => {
                 className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f8d816] focus:border-transparent transition-all"
               >
                 <option value="all">All Status</option>
+                <option value="pending">Pending</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
@@ -245,6 +317,7 @@ const AdminDashboard = () => {
                     "Contact",
                     "Date & Time",
                     "OPD",
+                    "Case Form",
                     "Status",
                     "Actions",
                   ].map((header) => (
@@ -269,7 +342,13 @@ const AdminDashboard = () => {
                         <div className="text-sm text-gray-500">{b.email}</div>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="font-medium text-[#222]">{b.date}</div>
+                        <div className="font-medium text-[#222]">
+                          {new Date(b.date).toLocaleDateString('en-IN', { 
+                            year: 'numeric', 
+                            month: 'short', 
+                            day: 'numeric' 
+                          })}
+                        </div>
                         <div className="text-sm text-gray-500">{b.time}</div>
                       </td>
                       <td className="py-4 px-6">
@@ -278,43 +357,57 @@ const AdminDashboard = () => {
                         </span>
                       </td>
                       <td className="py-4 px-6">
+                        {b.fillCaseForm ? (
+                          <span className="px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-medium border border-green-200">
+                            Filled
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium border border-gray-200">
+                            Not Filled
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
                         <span
                           className={`px-3 py-1 rounded-full text-sm font-medium ${
                             b.status === "confirmed"
                               ? "bg-green-100 text-green-800 border border-green-200"
-                              : "bg-red-100 text-red-800 border border-red-200"
+                              : b.status === "cancelled"
+                              ? "bg-red-100 text-red-800 border border-red-200"
+                              : "bg-yellow-100 text-yellow-800 border border-yellow-200"
                           }`}
                         >
                           {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
                         </span>
                       </td>
                       <td className="py-4 px-6">
-                        {b.status === "confirmed" ? (
-                          <button
-                            onClick={() =>
-                              handleStatusChange(b.id, "cancelled")
-                            }
-                            className="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-colors shadow-sm"
-                          >
-                            Cancel
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              handleStatusChange(b.id, "confirmed")
-                            }
-                            className="px-4 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-colors shadow-sm"
-                          >
-                            Confirm
-                          </button>
-                        )}
+                        <div className="flex gap-2">
+                          {b.status !== "confirmed" && (
+                            <button
+                              onClick={() => handleStatusChange(b.id, "confirmed")}
+                              className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-semibold hover:bg-green-600 transition-colors shadow-sm"
+                              disabled={loading}
+                            >
+                              Confirm
+                            </button>
+                          )}
+                          {b.status !== "cancelled" && (
+                            <button
+                              onClick={() => handleStatusChange(b.id, "cancelled")}
+                              className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600 transition-colors shadow-sm"
+                              disabled={loading}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan="7"
                       className="py-12 text-center text-gray-500 font-medium"
                     >
                       <div className="flex flex-col items-center justify-center">
@@ -340,7 +433,7 @@ const AdminDashboard = () => {
               </span>
               {filterDate && (
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                  Date: {filterDate}
+                  Date: {new Date(filterDate).toLocaleDateString('en-IN')}
                 </span>
               )}
               {filterStatus !== "all" && (

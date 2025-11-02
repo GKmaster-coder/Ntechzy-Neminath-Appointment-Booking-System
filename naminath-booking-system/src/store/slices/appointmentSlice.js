@@ -1,3 +1,4 @@
+// slices/appointmentSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { appointmentAPI } from '../../services/api';
 
@@ -7,9 +8,10 @@ export const createAppointment = createAsyncThunk(
   async (appointmentData, { rejectWithValue }) => {
     try {
       const response = await appointmentAPI.createAppointment(appointmentData);
-      return response.data;
+      // Extract data from response
+      return response.data.data || response.data;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
 );
@@ -19,7 +21,9 @@ export const checkAvailability = createAsyncThunk(
   async ({ date, time }, { rejectWithValue }) => {
     try {
       const response = await appointmentAPI.getAppointmentsByDate(date);
-      const bookedAppointments = response.data.filter(
+      // Extract data array from response
+      const appointments = response.data.data || response.data;
+      const bookedAppointments = appointments.filter(
         appointment => appointment.selectedTime === time
       );
       const bookedOPDs = bookedAppointments.map(app => app.selectedOPD);
@@ -30,7 +34,7 @@ export const checkAvailability = createAsyncThunk(
         isSlotAvailable: availableOPDs.length > 0
       };
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
 );
@@ -40,9 +44,47 @@ export const getAppointmentById = createAsyncThunk(
   async (appointmentId, { rejectWithValue }) => {
     try {
       const response = await appointmentAPI.getAppointmentById(appointmentId);
-      return response.data;
+      return response.data.data || response.data;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
+
+// Admin thunks
+export const getAllAppointments = createAsyncThunk(
+  'appointment/getAllAppointments',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await appointmentAPI.getAllAppointments();
+      // Extract the data array from the response
+      return response.data.data || response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
+
+export const getAppointmentsByDate = createAsyncThunk(
+  'appointment/getAppointmentsByDate',
+  async (date, { rejectWithValue }) => {
+    try {
+      const response = await appointmentAPI.getAppointmentsByDate(date);
+      return response.data.data || response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
+
+export const updateAppointmentStatus = createAsyncThunk(
+  'appointment/updateAppointmentStatus',
+  async ({ id, status }, { rejectWithValue }) => {
+    try {
+      const response = await appointmentAPI.updateAppointmentStatus(id, status);
+      return response.data.data || response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
 );
@@ -73,7 +115,13 @@ const initialState = {
   appointmentDetails: null,
   
   // Time slots
-  timeSlots: []
+  timeSlots: [],
+  
+  // Admin data
+  allAppointments: [],
+  appointmentsByDate: [],
+  adminLoading: false,
+  adminError: null
 };
 
 // Slice
@@ -125,6 +173,19 @@ const appointmentSlice = createSlice({
       state.timeSlots = action.payload;
     },
     
+    // Admin actions
+    setAllAppointments: (state, action) => {
+      state.allAppointments = action.payload;
+    },
+    
+    setAdminLoading: (state, action) => {
+      state.adminLoading = action.payload;
+    },
+    
+    setAdminError: (state, action) => {
+      state.adminError = action.payload;
+    },
+    
     // Reset actions
     resetForm: (state) => {
       state.formData = initialState.formData;
@@ -137,6 +198,13 @@ const appointmentSlice = createSlice({
     
     resetError: (state) => {
       state.error = null;
+    },
+    
+    resetAdminState: (state) => {
+      state.allAppointments = [];
+      state.appointmentsByDate = [];
+      state.adminLoading = false;
+      state.adminError = null;
     }
   },
   
@@ -190,6 +258,56 @@ const appointmentSlice = createSlice({
       .addCase(getAppointmentById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      
+      // Get All Appointments (Admin)
+      .addCase(getAllAppointments.pending, (state) => {
+        state.adminLoading = true;
+        state.adminError = null;
+      })
+      .addCase(getAllAppointments.fulfilled, (state, action) => {
+        state.adminLoading = false;
+        // Ensure we're setting an array
+        state.allAppointments = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(getAllAppointments.rejected, (state, action) => {
+        state.adminLoading = false;
+        state.adminError = action.payload || 'Failed to fetch appointments';
+        state.allAppointments = []; // Set empty array on error
+      })
+      
+      // Get Appointments by Date
+      .addCase(getAppointmentsByDate.pending, (state) => {
+        state.adminLoading = true;
+        state.adminError = null;
+      })
+      .addCase(getAppointmentsByDate.fulfilled, (state, action) => {
+        state.adminLoading = false;
+        state.appointmentsByDate = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(getAppointmentsByDate.rejected, (state, action) => {
+        state.adminLoading = false;
+        state.adminError = action.payload || 'Failed to fetch appointments by date';
+        state.appointmentsByDate = [];
+      })
+      
+      // Update Appointment Status
+      .addCase(updateAppointmentStatus.pending, (state) => {
+        state.adminLoading = true;
+        state.adminError = null;
+      })
+      .addCase(updateAppointmentStatus.fulfilled, (state, action) => {
+        state.adminLoading = false;
+        // Update the appointment in allAppointments
+        const updatedAppointment = action.payload;
+        const index = state.allAppointments.findIndex(apt => apt._id === updatedAppointment._id);
+        if (index !== -1) {
+          state.allAppointments[index] = updatedAppointment;
+        }
+      })
+      .addCase(updateAppointmentStatus.rejected, (state, action) => {
+        state.adminLoading = false;
+        state.adminError = action.payload || 'Failed to update appointment status';
       });
   }
 });
@@ -206,8 +324,12 @@ export const {
   setError,
   setAvailableOPDs,
   setTimeSlots,
+  setAllAppointments,
+  setAdminLoading,
+  setAdminError,
   resetForm,
-  resetError
+  resetError,
+  resetAdminState
 } = appointmentSlice.actions;
 
 // Export selectors
@@ -220,5 +342,11 @@ export const selectError = (state) => state.appointment.error;
 export const selectAppointmentId = (state) => state.appointment.appointmentId;
 export const selectAppointmentDetails = (state) => state.appointment.appointmentDetails;
 export const selectTimeSlots = (state) => state.appointment.timeSlots;
+
+// Admin selectors
+export const selectAllAppointments = (state) => state.appointment?.allAppointments || [];
+export const selectAppointmentsByDate = (state) => state.appointment?.appointmentsByDate || [];
+export const selectAdminLoading = (state) => state.appointment?.adminLoading || false;
+export const selectAdminError = (state) => state.appointment?.adminError || null;
 
 export default appointmentSlice.reducer;
