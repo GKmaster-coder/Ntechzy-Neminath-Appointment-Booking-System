@@ -2,11 +2,20 @@ import mongoose from "mongoose";
 
 const caseFormSchema = new mongoose.Schema(
   {
+    // ✅ Required for 1-to-1 relation with Appointment
+    appointmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Appointment",
+      required: true,
+      unique: true,
+      sparse: true // ✅ prevents duplicate null key error
+    },
+
     // Basic Information
     currentHeight: String,
     currentWeight: String,
     chiefComplaint: String,
-    
+
     // Fetal/Birth Information
     maternalHealth: [String],
     maternalIssues: String,
@@ -17,14 +26,14 @@ const caseFormSchema = new mongoose.Schema(
     breastFedDuration: String,
     goodBaby: String,
     cryLot: String,
-    
+
     // Development Milestones
     teethAge: String,
     crawlAge: String,
     walkAge: String,
     talkAge: String,
     milestonesNormal: String,
-    
+
     // Illness History
     chickenPox: String,
     mumps: String,
@@ -41,27 +50,29 @@ const caseFormSchema = new mongoose.Schema(
     malaria: String,
     surgicalHistory: String,
     otherIllnesses: String,
-    
+
     // Recurring Issues
     recurringIssues: [String],
-    
+
     // Vaccinations
     vaccinationReactions: String,
     healthDeclineVaccination: String,
     allergyDesensitization: String,
-    
+
     // Family Health History
-    familyHistory: [{
-      relation: String,
-      ageAlive: String,
-      agePassing: String,
-      ailments: String
-    }],
-    
+    familyHistory: [
+      {
+        relation: String,
+        ageAlive: String,
+        agePassing: String,
+        ailments: String
+      }
+    ],
+
     // Significant Life Events
     significantEvents: String,
     ageFramesUnsure: String,
-    
+
     // Personality & Nature
     childhoodNature: String,
     angerReaction: [String],
@@ -71,7 +82,7 @@ const caseFormSchema = new mongoose.Schema(
     painfulTime: String,
     hobbies: String,
     stressFactor: String,
-    
+
     // Symptoms & Pain
     painSymptoms: [String],
     symptomBetter: String,
