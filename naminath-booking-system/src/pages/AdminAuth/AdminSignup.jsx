@@ -1,93 +1,160 @@
-import React, { useState } from "react";
+import React, { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { registerUser, clearAuthState } from "../../store/slices/authSlice";
 import { useNavigate, Link } from "react-router-dom";
+import { useFormik } from "formik";
+import * as Yup from "yup";
 
 const AdminSignup = () => {
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
-  const [error, setError] = useState("");
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { loading, error, success } = useSelector((state) => state.auth);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  // ✅ Yup validation schema
+  const validationSchema = Yup.object({
+    fullName: Yup.string()
+      .trim()
+      .min(3, "Full name must be at least 3 characters")
+      .required("Full name is required"),
+    email: Yup.string()
+      .email("Invalid email address")
+      .required("Email is required"),
+    password: Yup.string()
+      .min(6, "Password must be at least 6 characters long")
+      .required("Password is required"),
+    confirmPassword: Yup.string()
+      .oneOf([Yup.ref("password"), null], "Passwords must match")
+      .required("Confirm password is required"),
+  });
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  // ✅ Formik setup
+  const formik = useFormik({
+    initialValues: {
+      fullName: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+    validationSchema,
+    onSubmit: (values) => {
+      dispatch(registerUser(values));
+    },
+  });
 
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
-      return;
+  // Redirect if signup success
+  useEffect(() => {
+    if (success) {
+      navigate("/admin/login");
     }
-
-    const adminData = {
-      name: form.name,
-      email: form.email,
-      password: form.password,
-    };
-
-    localStorage.setItem("adminData", JSON.stringify(adminData));
-    navigate("/admin/login");
-  };
+  }, [success, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#fff7e6] px-4 sm:px-6 poppins">
+    <div className="min-h-screen flex items-center justify-center bg-[#fff7e6] px-4 sm:px-6">
       <div className="bg-white shadow-lg rounded-xl border-t-8 border-[#FFD700] p-6 sm:p-8 w-full max-w-md">
         <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-center text-[#C00000]">
           Admin Signup
         </h2>
-        {error && <p className="text-red-600 text-sm sm:text-base text-center mb-4">{error}</p>}
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+
+        {error && <p className="text-red-600 text-center">{error}</p>}
+        {success && <p className="text-green-600 text-center">{success}</p>}
+
+        <form onSubmit={formik.handleSubmit} className="space-y-4 sm:space-y-5">
+          {/* Full Name */}
           <div>
-            <label className="block font-medium mb-1 text-[#222]">Full Name</label>
             <input
               type="text"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-3 md:py-2 focus:outline-none focus:ring-2 focus:ring-[#FFD700] text-sm sm:text-base"
+              name="fullName"
+              value={formik.values.fullName}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              placeholder="Full Name"
+              className={`w-full border rounded-lg px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#FFD700] ${
+                formik.touched.fullName && formik.errors.fullName
+                  ? "border-red-500"
+                  : "border-gray-300"
+              }`}
             />
+            {formik.touched.fullName && formik.errors.fullName && (
+              <p className="text-red-600 text-sm mt-1">{formik.errors.fullName}</p>
+            )}
           </div>
+
+          {/* Email */}
           <div>
-            <label className="block font-medium mb-1 text-[#222]">Email</label>
             <input
               type="email"
               name="email"
-              value={form.email}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-3 md:py-2 focus:outline-none focus:ring-2 focus:ring-[#FFD700] text-sm sm:text-base"
+              value={formik.values.email}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              placeholder="Email"
+              className={`w-full border rounded-lg px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#FFD700] ${
+                formik.touched.email && formik.errors.email
+                  ? "border-red-500"
+                  : "border-gray-300"
+              }`}
             />
+            {formik.touched.email && formik.errors.email && (
+              <p className="text-red-600 text-sm mt-1">{formik.errors.email}</p>
+            )}
           </div>
+
+          {/* Password */}
           <div>
-            <label className="block font-medium mb-1 text-[#222]">Password</label>
             <input
               type="password"
               name="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-3 md:py-2 focus:outline-none focus:ring-2 focus:ring-[#FFD700] text-sm sm:text-base"
+              value={formik.values.password}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              placeholder="Password"
+              className={`w-full border rounded-lg px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#FFD700] ${
+                formik.touched.password && formik.errors.password
+                  ? "border-red-500"
+                  : "border-gray-300"
+              }`}
             />
+            {formik.touched.password && formik.errors.password && (
+              <p className="text-red-600 text-sm mt-1">{formik.errors.password}</p>
+            )}
           </div>
+
+          {/* Confirm Password */}
           <div>
-            <label className="block font-medium mb-1 text-[#222]">Confirm Password</label>
             <input
               type="password"
               name="confirmPassword"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-3 md:py-2 focus:outline-none focus:ring-2 focus:ring-[#FFD700] text-sm sm:text-base"
+              value={formik.values.confirmPassword}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              placeholder="Confirm Password"
+              className={`w-full border rounded-lg px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#FFD700] ${
+                formik.touched.confirmPassword && formik.errors.confirmPassword
+                  ? "border-red-500"
+                  : "border-gray-300"
+              }`}
             />
+            {formik.touched.confirmPassword && formik.errors.confirmPassword && (
+              <p className="text-red-600 text-sm mt-1">{formik.errors.confirmPassword}</p>
+            )}
           </div>
+
+          {/* Signup Button */}
           <button
             type="submit"
-            className="w-full bg-[#C00000] text-white py-3 sm:py-3 rounded-lg font-semibold hover:bg-[#a00000] transition-all text-sm sm:text-base"
+            disabled={loading}
+            className="w-full bg-[#C00000] text-white py-2 rounded-lg font-semibold hover:bg-[#a00000] disabled:opacity-50 transition-all"
           >
-            Signup
+            {loading ? "Registering..." : "Signup"}
           </button>
         </form>
-        <p className="text-sm sm:text-base text-center mt-5 text-[#333]">
+
+        <p className="text-center mt-5 text-[#333] text-sm sm:text-base">
           Already have an account?{" "}
-          <Link to="/admin/login" className="text-[#C00000] font-semibold hover:underline">
+          <Link
+            to="/admin/login"
+            className="text-[#C00000] font-semibold hover:underline"
+          >
             Login
           </Link>
         </p>

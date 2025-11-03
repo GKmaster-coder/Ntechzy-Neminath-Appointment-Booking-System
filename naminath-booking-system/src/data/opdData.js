@@ -11,7 +11,7 @@ export const OPD_ROOMS = [
 export function generateSlots(){
 const slots = []
 const start = new Date()
-start.setHours(9,0,0,0)
+start.setHours(10,0,0,0)
 const end = new Date()
 end.setHours(16,0,0,0)
 for(let t = new Date(start); t < end; t.setMinutes(t.getMinutes()+30)){

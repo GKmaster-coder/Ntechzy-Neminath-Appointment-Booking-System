@@ -2,7 +2,7 @@
 import express from "express";
 import { body } from "express-validator";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { register, login, forgotPassword, verifyOtp, resetPassword, me } from "../controller/auth.controller.js";
+import { register, login, forgotPassword, verifyOtp, resetPassword, me } from "../controllers/auth.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 
 const router = express.Router();

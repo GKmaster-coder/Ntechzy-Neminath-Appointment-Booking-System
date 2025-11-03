@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import ProgressIndicator from "./ProgressIndicator";
 import PersonalInfoStep from "./PersonalInfoStep";
 import DateTimeStep from "./DateTimeStep";
@@ -7,170 +8,168 @@ import CaseFormStep from "./CaseFormStep";
 import PaymentStep from "./PaymentStep";
 import ConfirmationStep from "./ConfirmationStep";
 import AlternativeSlotsStep from "./AlternativeSlotsStep";
-import { useBookings } from "./hooks/useBookings";
-import { useTimeSlots } from "./hooks/useTimeSlots";
+import {
+  updateFormData,
+  setCurrentStep,
+  checkAvailability,
+  createAppointment,
+  resetForm,
+  selectFormData,
+  selectCurrentStep,
+  selectAvailableOPDs,
+  selectLoading,
+  selectError,
+  selectAppointmentDetails,
+  setAvailableOPDs,
+} from "../../store/slices/appointmentSlice"; // Adjust path
 
 const UserBooking = () => {
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    name: "",
-    phoneNo: "",
-    email: "",
-    selectedDate: "",
-    selectedTime: "",
-    selectedOPD: null,
-    paymentMethod: null,
-    caseDescription: "",
-    previousHistory: "",
-    currentMeds: "",
-    allergies: "",
-    fillCaseForm: false, // ✅ Added
-  });
+  const dispatch = useDispatch();
 
+  // Redux state
+  const formData = useSelector(selectFormData);
+  const step = useSelector(selectCurrentStep);
+  const availableOPDs = useSelector(selectAvailableOPDs);
+  const loading = useSelector(selectLoading);
+  const error = useSelector(selectError);
+  const appointmentDetails = useSelector(selectAppointmentDetails);
+
+  // Calculate total steps based on case form
   const totalSteps = formData.fillCaseForm ? 6 : 5;
 
-  const [availableOPDs, setAvailableOPDs] = useState([]);
-  const [suggestedSlots, setSuggestedSlots] = useState([]);
-
-  const { bookings, addBooking } = useBookings();
-  const { generateTimeSlots, findAlternativeSlots } = useTimeSlots(bookings);
+  // Generate time slots
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 10; hour < 16; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const timeString = `${hour.toString().padStart(2, "0")}:${minute
+          .toString()
+          .padStart(2, "0")}`;
+        slots.push(timeString);
+      }
+    }
+    return slots;
+  };
 
   // Handle input changes
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+    dispatch(
+      updateFormData({
+        [name]: type === "checkbox" ? checked : value,
+      })
+    );
   };
 
   // Handle date & time selection
-  const handleDateTimeSelect = () => {
+  const handleDateTimeSelect = async () => {
     if (!formData.selectedDate || !formData.selectedTime) {
       alert("Please select both date and time");
       return;
     }
 
     const selectedHour = parseInt(formData.selectedTime.split(":")[0]);
-    if (selectedHour < 9 || selectedHour >= 16) {
-      alert("Please select a time between 9:00 AM and 4:00 PM");
+    if (selectedHour < 10 || selectedHour >= 16) {
+      alert("Please select a time between 10:00 AM and 4:00 PM");
       return;
     }
 
-    const bookedOPDs = bookings
-      .filter(
-        (booking) =>
-          booking.date === formData.selectedDate &&
-          booking.time === formData.selectedTime &&
-          booking.status !== "cancelled"
-      )
-      .map((booking) => booking.opd);
+    try {
+      // Check availability via API
+      const result = await dispatch(
+        checkAvailability({
+          date: formData.selectedDate,
+          time: formData.selectedTime,
+        })
+      ).unwrap();
 
-    const allOPDs = [1, 2, 3, 4, 5];
-    const available = allOPDs.filter((opd) => !bookedOPDs.includes(opd));
-
-    setAvailableOPDs(available);
-
-    if (available.length === 0) {
-      const alternatives = findAlternativeSlots(
-        formData.selectedDate,
-        formData.selectedTime
-      );
-      setSuggestedSlots(alternatives);
-      setStep(6);
-    } else {
-      setStep(3);
+      // If slots available, move to OPD selection
+      // Otherwise, the slice will handle showing alternative slots
+    } catch (err) {
+      console.error("Availability check failed:", err);
+      alert("Failed to check availability. Please try again.");
     }
   };
 
   // Handle OPD selection
   const handleOPDSelect = (opd) => {
-    setFormData((prev) => ({
-      ...prev,
-      selectedOPD: opd,
-    }));
+    dispatch(updateFormData({ selectedOPD: opd }));
   };
 
   // Handle payment success
   const handlePaymentSuccess = (paymentMethod) => {
-    setFormData((prev) => ({
-      ...prev,
-      paymentMethod,
-    }));
-    setStep(totalSteps); // Go to confirmation step
+    dispatch(updateFormData({ paymentMethod }));
+    dispatch(setCurrentStep(totalSteps)); // Go to confirmation step
   };
 
   // Handle booking confirmation
-  const handleConfirmBooking = () => {
-    const newBooking = {
-      id: Date.now().toString(),
-      name: formData.name,
-      phoneNo: formData.phoneNo,
-      email: formData.email,
-      date: formData.selectedDate,
-      time: formData.selectedTime,
-      opd: formData.selectedOPD,
-      status: "confirmed",
-      paymentMethod: formData.paymentMethod,
-      amount: 5000,
-      bookedAt: new Date().toISOString(),
-    };
+  const handleConfirmBooking = async () => {
+    try {
+      // Prepare appointment data
+      const appointmentData = {
+        name: formData.name,
+        phoneNo: formData.phoneNo,
+        email: formData.email,
+        selectedDate: formData.selectedDate,
+        selectedTime: formData.selectedTime,
+        selectedOPD: formData.selectedOPD,
+        caseDescription: formData.caseDescription || "",
+        fillCaseForm: formData.fillCaseForm,
+        caseForm: formData.fillCaseForm ? formData.caseForm : {},
+      };
 
-    addBooking(newBooking);
-    alert("Booking confirmed successfully!");
+      // Create appointment via API
+      await dispatch(createAppointment(appointmentData)).unwrap();
 
-    // Reset form
-    setFormData({
-      name: "",
-      phoneNo: "",
-      email: "",
-      selectedDate: "",
-      selectedTime: "",
-      selectedOPD: null,
-      paymentMethod: null,
-      caseDescription: "",
-      previousHistory: "",
-      currentMeds: "",
-      allergies: "",
-      fillCaseForm: false, // ✅ Reset
-    });
-    setStep(1);
+      alert("Booking confirmed successfully!");
+
+      // Reset form
+      dispatch(resetForm());
+    } catch (err) {
+      console.error("Booking failed:", err);
+      alert(`Failed to confirm booking: ${err}`);
+    }
   };
 
   // Handle alternative slot selection
-  const handleAlternativeSelect = (date, time) => {
-    setFormData((prev) => ({
-      ...prev,
-      selectedDate: date,
-      selectedTime: time,
-    }));
+  const handleAlternativeSelect = async (date, time) => {
+    dispatch(
+      updateFormData({
+        selectedDate: date,
+        selectedTime: time,
+      })
+    );
 
-    const bookedOPDs = bookings
-      .filter(
-        (booking) =>
-          booking.date === date &&
-          booking.time === time &&
-          booking.status !== "cancelled"
-      )
-      .map((booking) => booking.opd);
-
-    const allOPDs = [1, 2, 3, 4, 5];
-    const available = allOPDs.filter((opd) => !bookedOPDs.includes(opd));
-
-    setAvailableOPDs(available);
-    setStep(3);
+    try {
+      await dispatch(
+        checkAvailability({
+          date,
+          time,
+        })
+      ).unwrap();
+    } catch (err) {
+      console.error("Availability check failed:", err);
+      alert("Failed to check availability. Please try again.");
+    }
   };
+
+  // Show error message
+  useEffect(() => {
+    if (error) {
+      console.error("Appointment error:", error);
+    }
+  }, [error]);
 
   const renderStep = () => {
     if (formData.fillCaseForm) {
-      // ✅ With Case Form
+      // ✅ With Case Form (6 steps)
       switch (step) {
         case 1:
           return (
             <PersonalInfoStep
               formData={formData}
               onInputChange={handleInputChange}
-              onNext={() => setStep(2)}
+              onNext={() => dispatch(setCurrentStep(2))}
             />
           );
         case 2:
@@ -178,9 +177,10 @@ const UserBooking = () => {
             <DateTimeStep
               formData={formData}
               onInputChange={handleInputChange}
-              onBack={() => setStep(1)}
+              onBack={() => dispatch(setCurrentStep(1))}
               onDateTimeSelect={handleDateTimeSelect}
               timeSlots={generateTimeSlots()}
+              loading={loading}
             />
           );
         case 3:
@@ -189,8 +189,8 @@ const UserBooking = () => {
               formData={formData}
               availableOPDs={availableOPDs}
               onOPDSelect={handleOPDSelect}
-              onBack={() => setStep(2)}
-              onNext={(nextStep) => setStep(nextStep)}
+              onBack={() => dispatch(setCurrentStep(2))}
+              onNext={(nextStep) => dispatch(setCurrentStep(nextStep))}
               onInputChange={handleInputChange}
             />
           );
@@ -199,8 +199,8 @@ const UserBooking = () => {
             <CaseFormStep
               formData={formData}
               onInputChange={handleInputChange}
-              onBack={() => setStep(3)}
-              onNext={() => setStep(5)}
+              onBack={() => dispatch(setCurrentStep(3))}
+              onNext={() => dispatch(setCurrentStep(5))}
             />
           );
         case 5:
@@ -208,29 +208,30 @@ const UserBooking = () => {
             <PaymentStep
               formData={formData}
               onPaymentSuccess={handlePaymentSuccess}
-              onBack={() => setStep(4)}
+              onBack={() => dispatch(setCurrentStep(4))}
             />
           );
         case 6:
           return (
             <ConfirmationStep
               formData={formData}
-              onBack={() => setStep(5)}
+              onBack={() => dispatch(setCurrentStep(5))}
               onConfirm={handleConfirmBooking}
+              loading={loading}
             />
           );
         default:
           return null;
       }
     } else {
-      // ✅ Without Case Form
+      // ✅ Without Case Form (5 steps)
       switch (step) {
         case 1:
           return (
             <PersonalInfoStep
               formData={formData}
               onInputChange={handleInputChange}
-              onNext={() => setStep(2)}
+              onNext={() => dispatch(setCurrentStep(2))}
             />
           );
         case 2:
@@ -238,9 +239,10 @@ const UserBooking = () => {
             <DateTimeStep
               formData={formData}
               onInputChange={handleInputChange}
-              onBack={() => setStep(1)}
+              onBack={() => dispatch(setCurrentStep(1))}
               onDateTimeSelect={handleDateTimeSelect}
               timeSlots={generateTimeSlots()}
+              loading={loading}
             />
           );
         case 3:
@@ -249,8 +251,8 @@ const UserBooking = () => {
               formData={formData}
               availableOPDs={availableOPDs}
               onOPDSelect={handleOPDSelect}
-              onBack={() => setStep(2)}
-              onNext={(nextStep) => setStep(nextStep)}
+              onBack={() => dispatch(setCurrentStep(2))}
+              onNext={(nextStep) => dispatch(setCurrentStep(nextStep))}
               onInputChange={handleInputChange}
             />
           );
@@ -259,15 +261,16 @@ const UserBooking = () => {
             <PaymentStep
               formData={formData}
               onPaymentSuccess={handlePaymentSuccess}
-              onBack={() => setStep(3)}
+              onBack={() => dispatch(setCurrentStep(3))}
             />
           );
         case 5:
           return (
             <ConfirmationStep
               formData={formData}
-              onBack={() => setStep(4)}
+              onBack={() => dispatch(setCurrentStep(4))}
               onConfirm={handleConfirmBooking}
+              loading={loading}
             />
           );
         default:
@@ -283,7 +286,30 @@ const UserBooking = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-[#C00000] mb-2">
             Book Appointment
           </h1>
+          <p className="text-gray-600 text-sm sm:text-base">
+            Complete the form to schedule your OPD appointment
+          </p>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="flex items-center">
+              <svg
+                className="w-5 h-5 mr-2"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span className="font-medium">{error}</span>
+            </div>
+          </div>
+        )}
 
         <ProgressIndicator currentStep={step} totalSteps={totalSteps} />
 
